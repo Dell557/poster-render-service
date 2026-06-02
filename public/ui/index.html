@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>海报渲染控制台 v2.0</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      color: #e4e4e7;
+      line-height: 1.6;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+      padding: 24px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    header h1 {
+      font-size: 28px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+    
+    header p {
+      color: #a1a1aa;
+      font-size: 14px;
+    }
+    
+    .version-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    
+    .main-content {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    
+    @media (max-width: 1024px) {
+      .main-content {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    .panel {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #f4f4f5;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .panel-title::before {
+      content: '';
+      width: 4px;
+      height: 20px;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
+      border-radius: 2px;
+    }
+    
+    .form-section {
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    
+    .form-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #a1a1aa;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .section-title.collapsible::after {
+      content: '▼';
+      font-size: 10px;
+      transition: transform 0.2s;
+    }
+    
+    .section-title.collapsible.collapsed::after {
+      transform: rotate(-90deg);
+    }
+    
+    .section-content {
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    
+    .section-content.collapsed {
+      max-height: 0 !important;
+    }
+    
+    .form-group {
+      margin-bottom: 16px;
+    }
+    
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #a1a1aa;
+      margin-bottom: 6px;
+    }
+    
+    .form-group label .required {
+      color: #ef4444;
+      margin-left: 2px;
+    }
+    
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.2);
+      color: #f4f4f5;
+      font-size: 14px;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #60a5fa;
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
+    }
+    
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+    
+    .form-group select {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a1a1aa'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      background-size: 16px;
+      padding-right: 40px;
+    }
+    
+    .form-group input::placeholder,
+    .form-group textarea::placeholder {
+      color: #52525b;
+    }
+    
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+    
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+      width: 100%;
+      margin-top: 8px;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
+    }
+    
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .preview-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 400px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 12px;
+      border: 2px dashed rgba(255, 255, 255, 0.1);
+      padding: 20px;
+    }
+    
+    .preview-area.has-image {
+      border-style: solid;
+      border-color: rgba(96, 165, 250, 0.3);
+    }
+    
+    .preview-area img {
+      max-width: 100%;
+      max-height: 600px;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    
+    .preview-placeholder {
+      text-align: center;
+      color: #52525b;
+    }
+    
+    .preview-placeholder svg {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    
+    .result-info {
+      margin-top: 16px;
+      padding: 16px;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      border-radius: 10px;
+    }
+    
+    .result-info a {
+      color: #4ade80;
+      word-break: break-all;
+    }
+    
+    .result-info p {
+      font-size: 13px;
+      color: #a1a1aa;
+      margin-top: 8px;
+    }
+    
+    .error-info {
+      margin-top: 16px;
+      padding: 16px;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 10px;
+      color: #fca5a5;
+    }
+    
+    .loading {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: #a1a1aa;
+    }
+    
+    .loading-spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #60a5fa;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .info-box {
+      margin-top: 20px;
+      padding: 16px;
+      background: rgba(96, 165, 250, 0.1);
+      border: 1px solid rgba(96, 165, 250, 0.2);
+      border-radius: 10px;
+      font-size: 13px;
+    }
+    
+    .info-box h4 {
+      color: #60a5fa;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    
+    .info-box ul {
+      list-style: none;
+      color: #a1a1aa;
+    }
+    
+    .info-box li {
+      padding: 4px 0;
+    }
+    
+    .info-box code {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #e4e4e7;
+    }
+    
+    .version-select-wrapper {
+      position: relative;
+    }
+    
+    .version-select-wrapper select {
+      font-weight: 600;
+      background-color: rgba(59, 130, 246, 0.1);
+      border-color: rgba(59, 130, 246, 0.3);
+    }
+    
+    .version-select-wrapper select:focus {
+      border-color: #3b82f6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎨 海报渲染控制台 <span class="version-badge">v2.0</span></h1>
+      <p>支持博士版/教授版双版式，填写变量，实时预览并生成海报图片</p>
+    </header>
+    
+    <div class="main-content">
+      <div class="panel">
+        <h2 class="panel-title">变量配置</h2>
+        
+        <form id="renderForm">
+          <!-- 基础配置 -->
+          <div class="form-section">
+            <div class="section-title">📋 基础配置</div>
+            <div class="section-content">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="filename">文件名 <span class="required">*</span></label>
+                  <input type="text" id="filename" name="filename" placeholder="例如：poster_001" required>
+                </div>
+                <div class="form-group version-select-wrapper">
+                  <label for="posterVersion">海报版本 <span class="required">*</span></label>
+                  <select id="posterVersion" name="posterVersion" required>
+                    <option value="doctor">博士版</option>
+                    <option value="professor">教授版</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 必填变量 -->
+          <div class="form-section">
+            <div class="section-title">📝 必填变量</div>
+            <div class="section-content">
+              <div class="form-group">
+                <label for="posterImage">海报背景图URL <span class="required">*</span></label>
+                <input type="url" id="posterImage" name="posterImage" placeholder="https://..." required>
+              </div>
+              
+              <div class="form-group">
+                <label for="qrCode">二维码内容URL <span class="required">*</span></label>
+                <input type="url" id="qrCode" name="qrCode" placeholder="https://..." required>
+              </div>
+              
+              <div class="form-group">
+                <label for="subjectCategory">学科大类（换行用 \n）<span class="required">*</span></label>
+                <input type="text" id="subjectCategory" name="subjectCategory" placeholder="材料\n科学" required>
+              </div>
+              
+              <div class="form-group">
+                <label for="projectTitle">课题名称 <span class="required">*</span></label>
+                <textarea id="projectTitle" name="projectTitle" placeholder="输入课题名称..." required></textarea>
+              </div>
+              
+              <div class="form-group">
+                <label for="suitableMajor">适合专业 <span class="required">*</span></label>
+                <input type="text" id="suitableMajor" name="suitableMajor" placeholder="物理类 | 化学类" required>
+              </div>
+              
+              <div class="form-group">
+                <label for="tutorBackground">导师背景 <span class="required">*</span></label>
+                <textarea id="tutorBackground" name="tutorBackground" placeholder="导师背景介绍..." required></textarea>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 固定内容（可选） -->
+          <div class="form-section">
+            <div class="section-title collapsible collapsed" onclick="toggleSection(this)">⚙️ 固定内容（可选，点击展开）</div>
+            <div class="section-content collapsed" style="max-height: 0;">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="mainTitle">主标题</label>
+                  <input type="text" id="mainTitle" name="mainTitle" placeholder="1V1">
+                </div>
+                <div class="form-group">
+                  <label for="qrCaption">二维码说明文字</label>
+                  <input type="text" id="qrCaption" name="qrCaption" placeholder="扫码了解课题详情">
+                </div>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="researchBenefit">科研权益</label>
+                  <input type="text" id="researchBenefit" name="researchBenefit" placeholder="专属导师推荐信">
+                </div>
+                <div class="form-group">
+                  <label for="paperBenefit">论文权益</label>
+                  <input type="text" id="paperBenefit" name="paperBenefit" placeholder="国际会议论文">
+                </div>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="projectLabel">项目标题</label>
+                  <input type="text" id="projectLabel" name="projectLabel" placeholder="国内高校科研项目[1V1]">
+                </div>
+                <div class="form-group">
+                  <label for="projectSubtitle">项目副标题</label>
+                  <input type="text" id="projectSubtitle" name="projectSubtitle" placeholder="远程线上科研 | 全年滚动招生">
+                </div>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="suitableMajorLabel">适合专业标签</label>
+                  <input type="text" id="suitableMajorLabel" name="suitableMajorLabel" placeholder="适合专业">
+                </div>
+                <div class="form-group">
+                  <label for="tutorBackgroundLabel">导师背景标签</label>
+                  <input type="text" id="tutorBackgroundLabel" name="tutorBackgroundLabel" placeholder="博士版：导师背景 / 教授版：参考导师背景">
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <button type="submit" class="btn btn-primary" id="submitBtn">
+            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            生成海报
+          </button>
+        </form>
+        
+        <div class="info-box">
+          <h4>🔐 登录说明</h4>
+          <ul>
+            <li>浏览器会弹出登录对话框</li>
+            <li>账户：<code>zkyc</code></li>
+            <li>密码：<code>Zkyc@565758</code></li>
+            <li>带 <span style="color:#ef4444">*</span> 的为必填项</li>
+            <li>固定内容不填则使用默认值</li>
+          </ul>
+        </div>
+      </div>
+      
+      <div class="panel">
+        <h2 class="panel-title">预览结果</h2>
+        
+        <div class="preview-area" id="previewArea">
+          <div class="preview-placeholder" id="placeholder">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <p>填写变量后点击"生成海报"</p>
+            <p>生成的图片将在此处预览</p>
+          </div>
+        </div>
+        
+        <div id="resultInfo" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const form = document.getElementById('renderForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const previewArea = document.getElementById('previewArea');
+    const placeholder = document.getElementById('placeholder');
+    const resultInfo = document.getElementById('resultInfo');
+    
+    // 切换折叠区域
+    function toggleSection(titleEl) {
+      titleEl.classList.toggle('collapsed');
+      const content = titleEl.nextElementSibling;
+      content.classList.toggle('collapsed');
+      if (!content.classList.contains('collapsed')) {
+        content.style.maxHeight = content.scrollHeight + 'px';
+      }
+    }
+    
+    // 处理换行符
+    function processNewlines(value) {
+      return value ? value.replace(/\\n/g, '\n') : value;
+    }
+    
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<div class="loading-spinner"></div> 生成中...';
+      
+      // 收集表单数据
+      const formData = new FormData(form);
+      const variables = {};
+      
+      // 必填变量
+      const requiredVars = ['posterImage', 'qrCode', 'subjectCategory', 'projectTitle', 'suitableMajor', 'tutorBackground'];
+      // 可选变量
+      const optionalVars = ['mainTitle', 'researchBenefit', 'paperBenefit', 'projectLabel', 'projectSubtitle', 'qrCaption', 'tutorBackgroundLabel', 'suitableMajorLabel'];
+      
+      for (const key of requiredVars) {
+        const value = formData.get(key);
+        if (value && value.trim()) {
+          variables[key] = processNewlines(value.trim());
+        }
+      }
+      
+      for (const key of optionalVars) {
+        const value = formData.get(key);
+        if (value && value.trim()) {
+          variables[key] = processNewlines(value.trim());
+        }
+      }
+      
+      const filename = formData.get('filename').trim();
+      const posterVersion = formData.get('posterVersion');
+      
+      try {
+        const response = await fetch('/ui/render', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ filename, posterVersion, variables })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          // 显示图片
+          placeholder.style.display = 'none';
+          previewArea.classList.add('has-image');
+          
+          const img = document.createElement('img');
+          img.src = data.data.imageUrl + '?t=' + Date.now();
+          img.alt = '生成的海报';
+          
+          // 移除旧图片
+          const oldImg = previewArea.querySelector('img');
+          if (oldImg) oldImg.remove();
+          
+          previewArea.appendChild(img);
+          
+          // 显示结果信息
+          resultInfo.style.display = 'block';
+          resultInfo.className = 'result-info';
+          resultInfo.innerHTML = `
+            <strong>✅ 渲染成功</strong><br>
+            <a href="${data.data.imageUrl}" target="_blank">${data.data.imageUrl}</a>
+            <p>文件名：${data.data.fileName}</p>
+            <p>版本：${data.data.posterVersion === 'doctor' ? '博士版' : '教授版'}</p>
+          `;
+        } else {
+          throw new Error(data.error || '渲染失败');
+        }
+      } catch (error) {
+        resultInfo.style.display = 'block';
+        resultInfo.className = 'error-info';
+        resultInfo.innerHTML = `<strong>❌ 错误</strong><br>${error.message}`;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+          生成海报
+        `;
+      }
+    });
+  </script>
+</body>
+</html>
+
