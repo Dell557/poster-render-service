@@ -143,12 +143,9 @@ export function PosterProfessor({ data }: PosterProfessorProps) {
       </p>
       
       {/* 二维码 */}
-      <div className="absolute left-[857px] rounded-[16px] size-[170px] top-[1635px]" data-name="变量：二维码">
+      <div className="absolute bottom-[120px] right-[80px] rounded-[16px] size-[170px]" data-name="变量：二维码">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-cover pointer-events-none rounded-[16px] size-full" src={qrCode} />
       </div>
-      
-      {/* 二维码提示文字 */}
-      <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_SC:Bold','Noto_Sans_JP:Bold',sans-serif] font-semibold leading-[normal] left-[862px] not-italic text-[#212121] text-[20px] text-nowrap top-[1810px]">{qrCaption}</p>
     </div>
   );
 }

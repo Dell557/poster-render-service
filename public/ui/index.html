@@ -395,9 +395,10 @@
                 </div>
                 <div class="form-group version-select-wrapper">
                   <label for="posterVersion">海报版本 <span class="required">*</span></label>
-                  <select id="posterVersion" name="posterVersion" required>
+                  <select id="posterVersion" name="posterVersion" required onchange="handleVersionChange()">
                     <option value="doctor">博士版</option>
                     <option value="professor">教授版</option>
+                    <option value="qr-only">只加入二维码</option>
                   </select>
                 </div>
               </div>
@@ -545,6 +546,56 @@
       }
     }
     
+    // 处理版本切换
+    function handleVersionChange() {
+      const version = document.getElementById('posterVersion').value;
+      const requiredSection = document.querySelector('.form-section:nth-child(2)');
+      const optionalSection = document.querySelector('.form-section:nth-child(3)');
+      
+      if (version === 'qr-only') {
+        // 只加入二维码模式：显示海报背景图和二维码字段
+        requiredSection.style.display = 'block';
+        optionalSection.style.display = 'none';
+        
+        // 隐藏不必要的必填字段
+        document.getElementById('subjectCategory').required = false;
+        document.getElementById('projectTitle').required = false;
+        document.getElementById('suitableMajor').required = false;
+        document.getElementById('tutorBackground').required = false;
+        document.getElementById('posterImage').required = true;
+        document.getElementById('qrCode').required = true;
+        
+        // 隐藏字段
+        document.getElementById('subjectCategory').closest('.form-group').style.display = 'none';
+        document.getElementById('projectTitle').closest('.form-group').style.display = 'none';
+        document.getElementById('suitableMajor').closest('.form-group').style.display = 'none';
+        document.getElementById('tutorBackground').closest('.form-group').style.display = 'none';
+        
+        // 显示必要字段
+        document.getElementById('posterImage').closest('.form-group').style.display = 'block';
+        document.getElementById('qrCode').closest('.form-group').style.display = 'block';
+      } else {
+        // 正常海报模式：显示所有字段
+        requiredSection.style.display = 'block';
+        optionalSection.style.display = 'block';
+        
+        // 恢复必填字段
+        document.getElementById('posterImage').required = true;
+        document.getElementById('subjectCategory').required = true;
+        document.getElementById('projectTitle').required = true;
+        document.getElementById('suitableMajor').required = true;
+        document.getElementById('tutorBackground').required = true;
+        document.getElementById('qrCode').required = true;
+        
+        // 显示字段
+        document.getElementById('posterImage').closest('.form-group').style.display = 'block';
+        document.getElementById('subjectCategory').closest('.form-group').style.display = 'block';
+        document.getElementById('projectTitle').closest('.form-group').style.display = 'block';
+        document.getElementById('suitableMajor').closest('.form-group').style.display = 'block';
+        document.getElementById('tutorBackground').closest('.form-group').style.display = 'block';
+      }
+    }
+    
     // 处理换行符
     function processNewlines(value) {
       return value ? value.replace(/\\n/g, '\n') : value;
@@ -559,28 +610,41 @@
       // 收集表单数据
       const formData = new FormData(form);
       const variables = {};
+      const posterVersion = formData.get('posterVersion');
       
-      // 必填变量
-      const requiredVars = ['posterImage', 'qrCode', 'subjectCategory', 'projectTitle', 'suitableMajor', 'tutorBackground'];
-      // 可选变量
-      const optionalVars = ['mainTitle', 'researchBenefit', 'paperBenefit', 'projectLabel', 'projectSubtitle', 'qrCaption', 'tutorBackgroundLabel', 'suitableMajorLabel'];
-      
-      for (const key of requiredVars) {
-        const value = formData.get(key);
-        if (value && value.trim()) {
-          variables[key] = processNewlines(value.trim());
+      // 只加入二维码模式：收集 posterImage 和 qrCode
+      if (posterVersion === 'qr-only') {
+        const posterImage = formData.get('posterImage');
+        const qrCode = formData.get('qrCode');
+        if (posterImage && posterImage.trim()) {
+          variables.posterImage = processNewlines(posterImage.trim());
         }
-      }
-      
-      for (const key of optionalVars) {
-        const value = formData.get(key);
-        if (value && value.trim()) {
-          variables[key] = processNewlines(value.trim());
+        if (qrCode && qrCode.trim()) {
+          variables.qrCode = processNewlines(qrCode.trim());
+        }
+      } else {
+        // 正常海报模式：收集所有变量
+        // 必填变量
+        const requiredVars = ['posterImage', 'qrCode', 'subjectCategory', 'projectTitle', 'suitableMajor', 'tutorBackground'];
+        // 可选变量
+        const optionalVars = ['mainTitle', 'researchBenefit', 'paperBenefit', 'projectLabel', 'projectSubtitle', 'qrCaption', 'tutorBackgroundLabel', 'suitableMajorLabel'];
+        
+        for (const key of requiredVars) {
+          const value = formData.get(key);
+          if (value && value.trim()) {
+            variables[key] = processNewlines(value.trim());
+          }
+        }
+        
+        for (const key of optionalVars) {
+          const value = formData.get(key);
+          if (value && value.trim()) {
+            variables[key] = processNewlines(value.trim());
+          }
         }
       }
       
       const filename = formData.get('filename').trim();
-      const posterVersion = formData.get('posterVersion');
       
       try {
         const response = await fetch('/ui/render', {
@@ -615,7 +679,7 @@
             <strong>✅ 渲染成功</strong><br>
             <a href="${data.data.imageUrl}" target="_blank">${data.data.imageUrl}</a>
             <p>文件名：${data.data.fileName}</p>
-            <p>版本：${data.data.posterVersion === 'doctor' ? '博士版' : '教授版'}</p>
+            <p>版本：${data.data.posterVersion === 'doctor' ? '博士版' : data.data.posterVersion === 'professor' ? '教授版' : '纯二维码'}</p>
           `;
         } else {
           throw new Error(data.error || '渲染失败');

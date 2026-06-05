@@ -68,18 +68,18 @@ export function PosterDoctor({ data }: PosterDoctorProps) {
   // 获取所有变量值（带默认值）
   const posterImage = getVal(data, 'posterImage', defaultValueDoctor.posterImage);
   const qrCode = getVal(data, 'qrCode', defaultValueDoctor.qrCode);
-  const subjectCategory = getVal(data, 'subjectCategory', defaultValueDoctor.subjectCategory);
-  const projectTitle = getVal(data, 'projectTitle', defaultValueDoctor.projectTitle);
-  const suitableMajor = getVal(data, 'suitableMajor', defaultValueDoctor.suitableMajor);
-  const tutorBackground = getVal(data, 'tutorBackground', defaultValueDoctor.tutorBackground);
-  const mainTitle = getVal(data, 'mainTitle', defaultValueDoctor.mainTitle);
-  const researchBenefit = getVal(data, 'researchBenefit', defaultValueDoctor.researchBenefit);
-  const paperBenefit = getVal(data, 'paperBenefit', defaultValueDoctor.paperBenefit);
-  const projectLabel = getVal(data, 'projectLabel', defaultValueDoctor.projectLabel);
-  const projectSubtitle = getVal(data, 'projectSubtitle', defaultValueDoctor.projectSubtitle);
-  const qrCaption = getVal(data, 'qrCaption', defaultValueDoctor.qrCaption);
-  const tutorBackgroundLabel = getVal(data, 'tutorBackgroundLabel', defaultValueDoctor.tutorBackgroundLabel);
-  const suitableMajorLabel = getVal(data, 'suitableMajorLabel', defaultValueDoctor.suitableMajorLabel);
+  const subjectCategory = data.subjectCategory || '';
+  const projectTitle = data.projectTitle || '';
+  const suitableMajor = data.suitableMajor || '';
+  const tutorBackground = data.tutorBackground || '';
+  const mainTitle = data.mainTitle || '';
+  const researchBenefit = data.researchBenefit || '';
+  const paperBenefit = data.paperBenefit || '';
+  const projectLabel = data.projectLabel || '';
+  const projectSubtitle = data.projectSubtitle || '';
+  const qrCaption = data.qrCaption || '';
+  const tutorBackgroundLabel = data.tutorBackgroundLabel || '';
+  const suitableMajorLabel = data.suitableMajorLabel || '';
 
   // 博士版格式化：科研权益和论文权益使用 "科研 - {xxx}" 格式
   const formattedResearchBenefit = `科研 - {${researchBenefit}}`;
@@ -101,59 +101,79 @@ export function PosterDoctor({ data }: PosterDoctorProps) {
       {/* 遮罩层 */}
       <div className="absolute backdrop-blur-[1px] backdrop-filter bg-[rgba(255,255,255,0)] h-[1920px] left-0 rounded-none top-0 w-[1080px]" data-name="固定内容：遮罩" />
       
-      {/* 二维码背景板 */}
-      <div className="absolute bg-white h-[224px] left-[819px] rounded-[8px] top-[1551px] w-[188px]" data-name="固定内容：二维码背景板" />
-      
-      {/* 二维码提示文字 */}
-      <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_SC:Bold','Noto_Sans_JP:Bold',sans-serif] font-semibold h-[34px] leading-[normal] left-[833px] not-italic text-[#212121] text-[20px] top-[1744px] w-[208px]">{qrCaption}</p>
-      
       {/* 二维码 */}
-      <div className="absolute left-[828px] rounded-[12px] size-[170px] top-[1569px]" data-name="变量：二维码">
+      <div className="absolute bottom-[120px] right-[80px] rounded-[12px] size-[170px]" data-name="变量：二维码">
         <img alt="" className="absolute inset-0 max-w-none object-50%-50% object-cover pointer-events-none rounded-[12px] size-full" src={qrCode} />
       </div>
       
       {/* 项目形式说明 */}
-      <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_SC:Bold','Noto_Sans_JP:Bold',sans-serif] font-semibold h-[50px] leading-[0] left-[77px] not-italic text-[32px] text-white top-[1728px] w-[509px]">
-        <span className="leading-[normal]">{subtitleParts[0]} </span>
-        <span className="leading-[25px]">|</span>
-        <span className="leading-[normal]"> {subtitleParts[1] || ''}</span>
-      </p>
+      {projectSubtitle && (
+        <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_SC:Bold','Noto_Sans_JP:Bold',sans-serif] font-semibold h-[50px] leading-[0] left-[77px] not-italic text-[32px] text-white top-[1728px] w-[509px]">
+          <span className="leading-[normal]">{subtitleParts[0]} </span>
+          <span className="leading-[25px]">|</span>
+          <span className="leading-[normal]"> {subtitleParts[1] || ''}</span>
+        </p>
+      )}
       
       {/* 项目标题 */}
-      <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_JP:Bold','Noto_Sans_SC:Bold',sans-serif] font-semibold h-[44px] leading-[normal] left-[77px] not-italic text-[36px] text-white top-[1660px] tracking-[2.52px] w-[486px]">{projectLabel}</p>
+      {projectLabel && (
+        <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_JP:Bold','Noto_Sans_SC:Bold',sans-serif] font-semibold h-[44px] leading-[normal] left-[77px] not-italic text-[36px] text-white top-[1660px] tracking-[2.52px] w-[486px]">{projectLabel}</p>
+      )}
       
       {/* 导师背景内容 */}
-      <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_JP:Bold',sans-serif] font-semibold h-[122px] leading-[normal] left-[72px] not-italic text-[36px] text-white top-[1369px] w-[945px] whitespace-pre-line">{tutorBackground}</p>
+      {tutorBackground && (
+        <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_JP:Bold',sans-serif] font-semibold h-[122px] leading-[normal] left-[72px] not-italic text-[36px] text-white top-[1369px] w-[945px] whitespace-pre-line">{tutorBackground}</p>
+      )}
       
       {/* 导师背景标签 */}
-      <TutorBackgroundLabel text={tutorBackgroundLabel} />
+      {tutorBackground && (
+        <TutorBackgroundLabel text={tutorBackgroundLabel} />
+      )}
       
       {/* 适合专业内容 */}
-      <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_JP:Bold',sans-serif] font-semibold h-[143px] leading-[normal] left-[72px] not-italic text-[36px] text-white top-[1042px] w-[945px] whitespace-pre-line">{suitableMajor}</p>
+      {suitableMajor && (
+        <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_JP:Bold',sans-serif] font-semibold h-[143px] leading-[normal] left-[72px] not-italic text-[36px] text-white top-[1042px] w-[945px] whitespace-pre-line">{suitableMajor}</p>
+      )}
       
       {/* 适合专业标签 */}
-      <SuitableMajorLabel text={suitableMajorLabel} />
+      {suitableMajor && (
+        <SuitableMajorLabel text={suitableMajorLabel} />
+      )}
       
       {/* 装饰线条 */}
-      <DecorationLine top="892px" />
-      <DecorationLine top="1218px" />
+      {(subjectCategory || projectTitle || suitableMajor || tutorBackground) && (
+        <>
+          <DecorationLine top="892px" />
+          <DecorationLine top="1218px" />
+        </>
+      )}
       
       {/* 成果说明 - 论文 */}
-      <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_JP:Bold','Noto_Sans_SC:Bold',sans-serif] font-semibold leading-[normal] left-[63px] not-italic text-[42px] text-white top-[402px] w-[480px]">{formattedPaperBenefit}</p>
+      {paperBenefit && (
+        <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_JP:Bold','Noto_Sans_SC:Bold',sans-serif] font-semibold leading-[normal] left-[63px] not-italic text-[42px] text-white top-[402px] w-[480px]">{formattedPaperBenefit}</p>
+      )}
       
       {/* 1V1大标题 */}
-      <div className="absolute flex flex-col font-['Inter:Semi_Bold',sans-serif] font-semibold justify-center leading-[0] left-[227px] not-italic text-[225px] text-center text-nowrap text-white top-[252px] tracking-[-18px] translate-x-[-50%] translate-y-[-50%]">
-        <p className="leading-[normal]">{mainTitle}</p>
-      </div>
+      {mainTitle && (
+        <div className="absolute flex flex-col font-['Inter:Semi_Bold',sans-serif] font-semibold justify-center leading-[0] left-[227px] not-italic text-[225px] text-center text-nowrap text-white top-[252px] tracking-[-18px] translate-x-[-50%] translate-y-[-50%]">
+          <p className="leading-[normal]">{mainTitle}</p>
+        </div>
+      )}
       
       {/* 学科分类标签 */}
-      <SubjectCategory text={subjectCategory} />
+      {subjectCategory && (
+        <SubjectCategory text={subjectCategory} />
+      )}
       
       {/* 成果说明 - 科研 */}
-      <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_JP:Bold','Noto_Sans_SC:Bold',sans-serif] font-semibold leading-[normal] left-[63px] not-italic text-[42px] text-white top-[352px] w-[480px]">{formattedResearchBenefit}</p>
+      {researchBenefit && (
+        <p className="absolute font-['Inter:Semi_Bold','Noto_Sans_JP:Bold','Noto_Sans_SC:Bold',sans-serif] font-semibold leading-[normal] left-[63px] not-italic text-[42px] text-white top-[352px] w-[480px]">{formattedResearchBenefit}</p>
+      )}
       
       {/* 项目主题 */}
-      <p className="absolute font-['Inter:Medium','Noto_Sans_JP:Medium','Noto_Sans_SC:Medium',sans-serif] font-medium h-[302px] leading-[normal] left-[63px] not-italic text-[72px] text-white top-[544px] tracking-[1.44px] w-[948px] whitespace-pre-line">{projectTitle}</p>
+      {projectTitle && (
+        <p className="absolute font-['Inter:Medium','Noto_Sans_JP:Medium','Noto_Sans_SC:Medium',sans-serif] font-medium h-[302px] leading-[normal] left-[63px] not-italic text-[72px] text-white top-[544px] tracking-[1.44px] w-[948px] whitespace-pre-line">{projectTitle}</p>
+      )}
     </div>
   );
 }

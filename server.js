@@ -54,7 +54,7 @@ fs.mkdirSync(publicDir, { recursive: true });
 fs.mkdirSync(path.join(publicDir, 'ui'), { recursive: true });
 
 // 支持的海报版本
-const POSTER_VERSIONS = ['doctor', 'professor'];
+const POSTER_VERSIONS = ['doctor', 'professor', 'qr-only'];
 
 // 默认示例变量（仅用于文档展示）
 const defaultVariables = {
@@ -119,15 +119,16 @@ function basicAuthGuard(req, res, next) {
 async function buildQrDataUrl(qrText) {
   if (!qrText) return null;
   return qrcode.toDataURL(qrText, { 
-    width: 200, 
-    margin: 1,
-    color: { dark: '#000000', light: '#ffffff' }
+    width: 500, 
+    margin: 2,
+    color: { dark: '#000000', light: '#ffffff' },
+    type: 'image/png'
   });
 }
 
 // Playwright 渲染截图
 async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
-  // 生成二维码
+  // 生成二维码（qrCode 字段总是被编码成二维码）
   const qrCodeDataUrl = variables.qrCode 
     ? await buildQrDataUrl(variables.qrCode) 
     : null;
@@ -283,12 +284,38 @@ app.post('/api/render', async (req, res) => {
     
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     
-    const filePath = await renderPoster({
-      variables,
-      posterVersion,
-      filename: filenameSafe,
-      baseUrl
-    });
+    let filePath;
+    
+    // 只加入二维码模式：使用博士版模板，但只渲染二维码
+    if (posterVersion === 'qr-only') {
+      if (!variables.qrCode || !variables.posterImage) {
+        return res.status(400).json({
+          success: false,
+          error: '只加入二维码模式需要提供 qrCode 和 posterImage 参数'
+        });
+      }
+      
+      // 使用博士版模板，但只传递必要的变量
+      const qrOnlyVariables = {
+        posterImage: variables.posterImage,
+        qrCode: variables.qrCode
+      };
+      
+      filePath = await renderPoster({
+        variables: qrOnlyVariables,
+        posterVersion: 'doctor', // 使用博士版模板
+        filename: filenameSafe,
+        baseUrl
+      });
+    } else {
+      // 正常海报渲染模式
+      filePath = await renderPoster({
+        variables,
+        posterVersion,
+        filename: filenameSafe,
+        baseUrl
+      });
+    }
     
     const imageUrl = `${baseUrl}/images/${filenameSafe}.png`;
     
@@ -340,6 +367,11 @@ app.get('/health', (req, res) => {
   });
 });
 
+// 根路径重定向到UI控制台
+app.get('/', (req, res) => {
+  res.redirect('/ui');
+});
+
 // UI 控制台 - 基础账号鉴权
 app.use('/ui', basicAuthGuard, express.static(path.join(publicDir, 'ui')));
 
@@ -371,12 +403,51 @@ app.post('/ui/render', basicAuthGuard, async (req, res) => {
       variableKeys: Object.keys(variables)
     });
     
-    const filePath = await renderPoster({
-      variables,
-      posterVersion,
-      filename: filenameSafe,
-      baseUrl
-    });
+    let filePath;
+    
+    // 只加入二维码模式：使用博士版模板，但只渲染二维码
+    if (posterVersion === 'qr-only') {
+      if (!variables.qrCode || !variables.posterImage) {
+        return res.status(400).json({
+          success: false,
+          error: '只加入二维码模式需要提供 qrCode 和 posterImage 参数'
+        });
+      }
+      
+      // 使用博士版模板，但只传递必要的变量
+      const qrOnlyVariables = {
+        posterImage: variables.posterImage,
+        qrCode: variables.qrCode,
+        // 其他变量设为空字符串，不使用默认值
+        subjectCategory: '',
+        projectTitle: '',
+        suitableMajor: '',
+        tutorBackground: '',
+        mainTitle: '',
+        researchBenefit: '',
+        paperBenefit: '',
+        projectLabel: '',
+        projectSubtitle: '',
+        qrCaption: '',
+        tutorBackgroundLabel: '',
+        suitableMajorLabel: ''
+      };
+      
+      filePath = await renderPoster({
+        variables: qrOnlyVariables,
+        posterVersion: 'doctor', // 使用博士版模板
+        filename: filenameSafe,
+        baseUrl
+      });
+    } else {
+      // 正常海报渲染模式
+      filePath = await renderPoster({
+        variables,
+        posterVersion,
+        filename: filenameSafe,
+        baseUrl
+      });
+    }
     
     const imageUrl = `${baseUrl}/images/${filenameSafe}.png`;
     
@@ -391,7 +462,7 @@ app.post('/ui/render', basicAuthGuard, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ UI 渲染失败:', error);
+    console.error('❌ API 渲染失败:', error);
     return res.status(500).json({
       success: false,
       error: error.message || '渲染失败'

@@ -398,6 +398,10 @@
     top: 1042px;
   }
 
+  .top-\[1150px\] {
+    top: 1150px;
+  }
+
   .top-\[1314px\] {
     top: 1314px;
   }
@@ -432,6 +436,42 @@
 
   .right-\[50px\] {
     right: 50px;
+  }
+
+  .right-\[54px\] {
+    right: 54px;
+  }
+
+  .right-\[60px\] {
+    right: 60px;
+  }
+
+  .right-\[80px\] {
+    right: 80px;
+  }
+
+  .bottom-\[50px\] {
+    bottom: 50px;
+  }
+
+  .bottom-\[60px\] {
+    bottom: 60px;
+  }
+
+  .bottom-\[70px\] {
+    bottom: 70px;
+  }
+
+  .bottom-\[80px\] {
+    bottom: 80px;
+  }
+
+  .bottom-\[100px\] {
+    bottom: 100px;
+  }
+
+  .bottom-\[120px\] {
+    bottom: 120px;
   }
 
 
