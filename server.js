@@ -14,6 +14,9 @@ const qrcode = require('qrcode');
 const { chromium } = require('playwright');
 require('dotenv').config();
 
+// 图片URL校验器（低风险安全校验）
+const { validateImageUrl } = require('./src/utils/urlValidator');
+
 // 数据库配置（延迟加载，仅在需要时导入）
 let db = null;
 function getDb() {
@@ -126,69 +129,168 @@ async function buildQrDataUrl(qrText) {
   });
 }
 
-// Playwright 渲染截图
-async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
-  // 生成二维码（qrCode 字段总是被编码成二维码）
-  const qrCodeDataUrl = variables.qrCode 
-    ? await buildQrDataUrl(variables.qrCode) 
-    : null;
+// ===== 错误处理工具函数 =====
+
+/**
+ * 渲染错误分类枚举
+ */
+const RenderErrorType = {
+  TIMEOUT: 'timeout',
+  NETWORK: 'network',
+  RENDER: 'render',
+  VALIDATION: 'validation',
+  SYSTEM: 'system'
+};
+
+/**
+ * 渲染错误类 - 双通道策略实现
+ * - 用户通道：友好的错误提示（用于UI展示，如Toast）
+ * - 技术通道：详细的错误信息（用于日志和排查）
+ */
+class RenderError extends Error {
+  constructor(type, userMessage, technicalDetails = {}) {
+    super(userMessage);
+    this.name = 'RenderError';
+    this.type = type;
+    this.userMessage = userMessage;
+    this.technicalDetails = technicalDetails;
+    this.timestamp = new Date().toISOString();
+  }
+}
+
+/**
+ * 错误分类器 - 根据原始错误判断错误类型
+ */
+function classifyError(error) {
+  const message = error.message || '';
   
-  // 准备注入的变量
-  const renderVariables = {
-    ...variables,
-    posterVersion,
-    qrCodeDataUrl
-  };
-  
-  // 检查构建产物是否存在
-  const indexPath = path.join(distDir, 'index.html');
-  if (!fs.existsSync(indexPath)) {
-    throw new Error('构建产物不存在，请先运行 npm run build');
+  // 超时错误
+  if (message.includes('timeout') || message.includes('Timeout')) {
+    return {
+      type: RenderErrorType.TIMEOUT,
+      userMessage: '海报渲染超时，请检查网络或稍后重试',
+      technicalDetails: {
+        originalMessage: message,
+        suggestion: '增加超时时间或检查网络稳定性'
+      }
+    };
   }
   
-  // 读取并修改 HTML，注入变量
-  let htmlContent = await fsp.readFile(indexPath, 'utf-8');
-  
-  // 在 </head> 前注入变量脚本和 Google Fonts
-  const injectedCode = `
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-      /* 全局字体设置 */
-      *, *::before, *::after {
-        font-family: 'Inter', 'Noto Sans SC', 'Noto Sans JP', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  // 网络错误
+  if (message.includes('net::') || 
+      message.includes('network') || 
+      message.includes('fetch') ||
+      message.includes('Connection')) {
+    return {
+      type: RenderErrorType.NETWORK,
+      userMessage: '网络请求失败，请检查网络连接',
+      technicalDetails: {
+        originalMessage: message,
+        suggestion: '检查网络连接或尝试更换网络'
       }
-    </style>
-    <script>window.RENDER_VARIABLES = ${JSON.stringify(renderVariables)};</script>
-  `;
-  htmlContent = htmlContent.replace('</head>', injectedCode + '</head>');
+    };
+  }
   
-  // 修复相对路径为绝对路径
-  htmlContent = htmlContent.replace(/href="\.\/assets\//g, `href="${baseUrl}/preview/assets/`);
-  htmlContent = htmlContent.replace(/src="\.\/assets\//g, `src="${baseUrl}/preview/assets/`);
+  // 渲染/元素未找到错误
+  if (message.includes('poster-container') ||
+      message.includes('Cannot find') ||
+      message.includes('element') ||
+      message.includes('null') ||
+      message.includes('undefined')) {
+    return {
+      type: RenderErrorType.RENDER,
+      userMessage: '海报模板加载失败，请联系管理员',
+      technicalDetails: {
+        originalMessage: message,
+        suggestion: '检查海报组件是否正确构建'
+      }
+    };
+  }
   
-  // 启动浏览器
-  const browser = await chromium.launch({
-    headless: true,
-    args: [
-      '--disable-web-security',
-      '--disable-features=VizDisplayCompositor',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--font-render-hinting=none'
-    ]
-  });
-  
-  const context = await browser.newContext({
-    viewport: { width: 1080, height: 1920 },
-    deviceScaleFactor: 1,
-    ignoreHTTPSErrors: true
-  });
-  
-  const page = await context.newPage();
+  // 默认系统错误
+  return {
+    type: RenderErrorType.SYSTEM,
+    userMessage: '渲染服务异常，请稍后重试',
+    technicalDetails: {
+      originalMessage: message,
+      suggestion: '联系技术支持排查'
+    }
+  };
+}
+
+/**
+ * Playwright 渲染截图（带完善错误处理）
+ */
+async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
+  let browser = null;
+  let context = null;
+  let page = null;
   
   try {
+    // 生成二维码（qrCode 字段总是被编码成二维码）
+    const qrCodeDataUrl = variables.qrCode 
+      ? await buildQrDataUrl(variables.qrCode) 
+      : null;
+    
+    // 准备注入的变量
+    const renderVariables = {
+      ...variables,
+      posterVersion,
+      qrCodeDataUrl
+    };
+    
+    // 检查构建产物是否存在
+    const indexPath = path.join(distDir, 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      throw new RenderError(
+        RenderErrorType.VALIDATION,
+        '系统配置异常，请联系管理员',
+        { originalMessage: '构建产物不存在', suggestion: '运行 npm run build 构建项目' }
+      );
+    }
+    
+    // 读取并修改 HTML，注入变量
+    let htmlContent = await fsp.readFile(indexPath, 'utf-8');
+    
+    // 在 </head> 前注入变量脚本和 Google Fonts
+    const injectedCode = `
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;600&display=swap" rel="stylesheet">
+      <style>
+        /* 全局字体设置 */
+        *, *::before, *::after {
+          font-family: 'Inter', 'Noto Sans SC', 'Noto Sans JP', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+      </style>
+      <script>window.RENDER_VARIABLES = ${JSON.stringify(renderVariables)};</script>
+    `;
+    htmlContent = htmlContent.replace('</head>', injectedCode + '</head>');
+    
+    // 修复相对路径为绝对路径
+    htmlContent = htmlContent.replace(/href="\.\/assets\//g, `href="${baseUrl}/preview/assets/`);
+    htmlContent = htmlContent.replace(/src="\.\/assets\//g, `src="${baseUrl}/preview/assets/`);
+    
+    // 启动浏览器
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--font-render-hinting=none'
+      ]
+    });
+    
+    context = await browser.newContext({
+      viewport: { width: 1080, height: 1920 },
+      deviceScaleFactor: 1,
+      ignoreHTTPSErrors: true
+    });
+    
+    page = await context.newPage();
+    
     // 通过 setContent 加载修改后的 HTML
     await page.setContent(htmlContent, {
       waitUntil: 'networkidle',
@@ -205,7 +307,7 @@ async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
       await page.evaluate(() => document.fonts && document.fonts.ready);
       await page.waitForTimeout(2000); // 给字体更多渲染时间
     } catch (e) {
-      console.log('字体等待警告:', e.message);
+      console.log('⚠️ 字体加载超时（非致命）:', e.message);
     }
     
     // 截图
@@ -227,8 +329,43 @@ async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
     }
     
     return outputPath;
+    
+  } catch (error) {
+    // 双通道策略：
+    // 1. 用户通道：返回友好的错误提示
+    // 2. 技术通道：记录详细日志用于排查
+    
+    // 如果已经是自定义错误，直接使用
+    if (error instanceof RenderError) {
+      console.error('❌ 渲染失败 [用户提示]:', error.userMessage);
+      console.error('❌ 渲染失败 [技术详情]:', JSON.stringify(error.technicalDetails, null, 2));
+      throw error;
+    }
+    
+    // 否则对原始错误进行分类处理
+    const { type, userMessage, technicalDetails } = classifyError(error);
+    
+    console.error('❌ 渲染失败 [类型]:', type);
+    console.error('❌ 渲染失败 [用户提示]:', userMessage);
+    console.error('❌ 渲染失败 [技术详情]:', JSON.stringify({
+      ...technicalDetails,
+      stack: error.stack,
+      posterVersion,
+      filename,
+      variableKeys: Object.keys(variables)
+    }, null, 2));
+    
+    throw new RenderError(type, userMessage, technicalDetails);
+    
   } finally {
-    await browser.close();
+    // 确保资源释放
+    try {
+      if (page) await page.close();
+      if (context) await context.close();
+      if (browser) await browser.close();
+    } catch (e) {
+      console.warn('⚠️ 资源释放警告:', e.message);
+    }
   }
 }
 
@@ -285,6 +422,7 @@ app.post('/api/render', async (req, res) => {
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     
     let filePath;
+    let renderVariables = variables;
     
     // 只加入二维码模式：使用博士版模板，但只渲染二维码
     if (posterVersion === 'qr-only') {
@@ -296,26 +434,36 @@ app.post('/api/render', async (req, res) => {
       }
       
       // 使用博士版模板，但只传递必要的变量
-      const qrOnlyVariables = {
+      renderVariables = {
         posterImage: variables.posterImage,
         qrCode: variables.qrCode
       };
-      
-      filePath = await renderPoster({
-        variables: qrOnlyVariables,
-        posterVersion: 'doctor', // 使用博士版模板
-        filename: filenameSafe,
-        baseUrl
-      });
-    } else {
-      // 正常海报渲染模式
-      filePath = await renderPoster({
-        variables,
-        posterVersion,
-        filename: filenameSafe,
-        baseUrl
-      });
     }
+    
+    // ===== 图片URL安全校验（在校验前先确定最终变量集）=====
+    // 校验 posterImage（背景图URL）
+    if (renderVariables.posterImage) {
+      const posterImageResult = validateImageUrl(renderVariables.posterImage);
+      if (!posterImageResult.valid) {
+        return res.status(400).json({
+          success: false,
+          error: `海报背景图URL校验失败: ${posterImageResult.error}`
+        });
+      }
+      // 使用转义后的URL防止XSS
+      renderVariables.posterImage = posterImageResult.sanitizedUrl;
+    }
+    
+    // ===== 图片URL安全校验结束 =====
+    // 注意：qrCode 字段会被编码成二维码，不需要进行图片URL校验
+    
+    // 执行渲染
+    filePath = await renderPoster({
+      variables: renderVariables,
+      posterVersion: posterVersion === 'qr-only' ? 'doctor' : posterVersion,
+      filename: filenameSafe,
+      baseUrl
+    });
     
     const imageUrl = `${baseUrl}/images/${filenameSafe}.png`;
     
@@ -332,10 +480,25 @@ app.post('/api/render', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ 渲染失败:', error);
-    return res.status(500).json({
+    // 双通道策略：
+    // 1. 用户通道：返回友好的错误提示（用于UI展示，如Toast）
+    // 2. 技术通道：详细日志已在renderPoster中记录
+    
+    const isRenderError = error instanceof RenderError;
+    const userMessage = isRenderError ? error.userMessage : (error.message || '渲染失败');
+    const errorType = isRenderError ? error.type : 'unknown';
+    
+    // 只返回用户友好的信息，技术详情已在服务端日志中记录
+    const statusCode = isRenderError && error.type === RenderErrorType.VALIDATION ? 400 : 500;
+    
+    return res.status(statusCode).json({
       success: false,
-      error: error.message || '渲染失败'
+      error: userMessage,
+      errorType,
+      // 生产环境不返回技术详情给前端，只在开发环境返回
+      ...(process.env.NODE_ENV === 'development' && isRenderError ? {
+        technicalDetails: error.technicalDetails
+      } : {})
     });
   }
 });
@@ -462,10 +625,25 @@ app.post('/ui/render', basicAuthGuard, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ API 渲染失败:', error);
-    return res.status(500).json({
+    // 双通道策略：
+    // 1. 用户通道：返回友好的错误提示（用于UI展示，如Toast）
+    // 2. 技术通道：详细日志已在renderPoster中记录
+    
+    const isRenderError = error instanceof RenderError;
+    const userMessage = isRenderError ? error.userMessage : (error.message || '渲染失败');
+    const errorType = isRenderError ? error.type : 'unknown';
+    
+    // 只返回用户友好的信息，技术详情已在服务端日志中记录
+    const statusCode = isRenderError && error.type === RenderErrorType.VALIDATION ? 400 : 500;
+    
+    return res.status(statusCode).json({
       success: false,
-      error: error.message || '渲染失败'
+      error: userMessage,
+      errorType,
+      // 生产环境不返回技术详情给前端，只在开发环境返回
+      ...(process.env.NODE_ENV === 'development' && isRenderError ? {
+        technicalDetails: error.technicalDetails
+      } : {})
     });
   }
 });
