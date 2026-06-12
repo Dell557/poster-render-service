@@ -12,6 +12,9 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 
+// 导入日志模块
+const logger = require('./utils/logger');
+
 // 导入配置
 const { PORT, API_AUTH_TOKEN, distDir, imagesDir, publicDir, POSTER_VERSIONS, apiDocumentation } = require('./config/constants');
 
@@ -25,17 +28,17 @@ const uiRoutes = require('./routes/uiRoutes');
 
 // 全局错误处理 - 防止未捕获异常导致服务崩溃
 process.on('uncaughtException', (error) => {
-  console.error('❌ 未捕获的异常:', error.message);
+  logger.error('❌ 未捕获的异常:', { message: error.message, stack: error.stack });
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ 未处理的 Promise 拒绝:', reason?.message || reason);
+  logger.error('❌ 未处理的 Promise 拒绝:', { reason: reason?.message || reason });
 });
 
 // 验证必要的环境变量
 if (!API_AUTH_TOKEN) {
-  console.error('❌ 缺少必要的环境变量: API_AUTH_TOKEN');
-  console.error('请在 .env 文件中配置 API_AUTH_TOKEN');
+  logger.error('❌ 缺少必要的环境变量: API_AUTH_TOKEN');
+  logger.error('请在 .env 文件中配置 API_AUTH_TOKEN');
   process.exit(1);
 }
 
@@ -51,6 +54,34 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// 请求日志中间件
+app.use((req, res, next) => {
+  const { method, originalUrl, ip, headers } = req;
+  const start = Date.now();
+  
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const { statusCode } = res;
+    
+    const logData = {
+      method,
+      url: originalUrl,
+      statusCode,
+      duration: `${duration}ms`,
+      ip,
+      userAgent: headers['user-agent']
+    };
+    
+    if (statusCode >= 400) {
+      logger.warn('请求异常', logData);
+    } else {
+      logger.http('请求完成', logData);
+    }
+  });
+  
+  next();
+});
+
 // 静态文件：图片公开访问
 app.use('/images', express.static(imagesDir));
 
@@ -59,18 +90,22 @@ app.use('/preview', express.static(distDir));
 
 // 健康检查（无需鉴权）
 app.get('/health', (req, res) => {
+  const buildExists = fs.existsSync(path.join(distDir, 'index.html'));
+  logger.info('健康检查', { buildExists });
+  
   res.json({
     success: true,
     message: '海报渲染服务运行正常',
     timestamp: new Date().toISOString(),
     version: apiDocumentation.version,
     supportedVersions: POSTER_VERSIONS,
-    buildExists: fs.existsSync(path.join(distDir, 'index.html'))
+    buildExists
   });
 });
 
 // 根路径重定向到UI控制台
 app.get('/', (req, res) => {
+  logger.info('根路径访问，重定向到 /ui');
   res.redirect('/ui');
 });
 
@@ -89,7 +124,13 @@ app.use('/ui', basicAuthGuard, express.static(path.join(publicDir, 'ui')));
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
-  console.error('服务器错误:', err);
+  logger.error('服务器错误', { 
+    error: err.message, 
+    stack: err.stack,
+    path: req.path,
+    method: req.method 
+  });
+  
   res.status(500).json({
     success: false,
     error: '服务器内部错误',
@@ -99,6 +140,7 @@ app.use((err, req, res, next) => {
 
 // 404 处理
 app.use((req, res) => {
+  logger.warn('404 未找到', { url: req.originalUrl, method: req.method });
   res.status(404).json({
     success: false,
     error: '未找到请求的资源'
@@ -107,15 +149,19 @@ app.use((req, res) => {
 
 // 启动服务器
 app.listen(PORT, () => {
-  console.log('\n🚀 海报渲染服务 v2.0 已启动');
-  console.log(`📡 服务地址: http://localhost:${PORT}`);
-  console.log(`🎨 支持版式: ${POSTER_VERSIONS.join(', ')}`);
-  console.log(`🔐 API 鉴权: Authorization Bearer 或 X-API-Key 头`);
-  console.log(`🔐 UI 鉴权: 浏览器登录 (账户: zkyc, 密码: Zkyc@565758)`);
-  console.log(`📁 构建状态: ${fs.existsSync(path.join(distDir, 'index.html')) ? '✅ 已构建' : '⚠️  需要运行 npm run build'}`);
-  console.log('\n📋 可用API:');
+  logger.info('\n🚀 海报渲染服务 v2.0 已启动');
+  logger.info(`📡 服务地址: http://localhost:${PORT}`);
+  logger.info(`🎨 支持版式: ${POSTER_VERSIONS.join(', ')}`);
+  logger.info(`🔐 API 鉴权: Authorization Bearer 或 X-API-Key 头`);
+  logger.info(`🔐 UI 鉴权: 浏览器登录 (账户: zkyc, 密码: Zkyc@565758)`);
+  
+  const buildExists = fs.existsSync(path.join(distDir, 'index.html'));
+  logger.info(`📁 构建状态: ${buildExists ? '✅ 已构建' : '⚠️  需要运行 npm run build'}`);
+  
+  logger.info('\n📋 可用API:');
   apiDocumentation.endpoints.forEach(ep => {
-    console.log(`   - ${ep.method.padEnd(4)} ${ep.path.padEnd(35)} - ${ep.description}`);
+    logger.info(`   - ${ep.method.padEnd(4)} ${ep.path.padEnd(35)} - ${ep.description}`);
   });
-  console.log('\n✅ 服务启动成功，等待请求...\n');
+  
+  logger.info('\n✅ 服务启动成功，等待请求...\n');
 });

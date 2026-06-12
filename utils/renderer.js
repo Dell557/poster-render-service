@@ -9,6 +9,7 @@ const fsp = require('fs').promises;
 const qrcode = require('qrcode');
 const { chromium } = require('playwright');
 const { RenderError, RenderErrorType, classifyError } = require('./errorHandler');
+const logger = require('./logger');
 
 const distDir = path.join(__dirname, '../dist');
 const imagesDir = path.join(__dirname, '../images');
@@ -18,6 +19,7 @@ const imagesDir = path.join(__dirname, '../images');
  */
 async function buildQrDataUrl(qrText) {
   if (!qrText) return null;
+  logger.debug('生成二维码', { length: qrText.length });
   return qrcode.toDataURL(qrText, { 
     width: 500, 
     margin: 2,
@@ -33,6 +35,8 @@ async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
   let browser = null;
   let context = null;
   let page = null;
+  
+  logger.info('开始渲染海报', { posterVersion, filename });
   
   try {
     // 生成二维码（qrCode 字段总是被编码成二维码）
@@ -50,6 +54,7 @@ async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
     // 检查构建产物是否存在
     const indexPath = path.join(distDir, 'index.html');
     if (!fs.existsSync(indexPath)) {
+      logger.error('构建产物不存在', { indexPath });
       throw new RenderError(
         RenderErrorType.VALIDATION,
         '系统配置异常，请联系管理员',
@@ -80,6 +85,7 @@ async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
     htmlContent = htmlContent.replace(/src="\.\/assets\//g, `src="${baseUrl}/preview/assets/`);
     
     // 启动浏览器
+    logger.debug('启动 Playwright 浏览器');
     browser = await chromium.launch({
       headless: true,
       args: [
@@ -100,12 +106,14 @@ async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
     page = await context.newPage();
     
     // 通过 setContent 加载修改后的 HTML
+    logger.debug('加载页面内容');
     await page.setContent(htmlContent, {
       waitUntil: 'networkidle',
       timeout: 30000
     });
     
     // 等待 React 渲染完成
+    logger.debug('等待 React 渲染');
     await page.waitForFunction(() => {
       return document.getElementById('poster-container') !== null;
     }, { timeout: 10000 });
@@ -113,13 +121,15 @@ async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
     // 等待字体加载
     try {
       await page.evaluate(() => document.fonts && document.fonts.ready);
-      await page.waitForTimeout(2000); // 给字体更多渲染时间
+      await page.waitForTimeout(2000);
+      logger.debug('字体加载完成');
     } catch (e) {
-      console.log('⚠️ 字体加载超时（非致命）:', e.message);
+      logger.warn('字体加载超时（非致命）', { error: e.message });
     }
     
     // 截图
     const outputPath = path.join(imagesDir, `${filename}.png`);
+    logger.debug('开始截图', { outputPath });
     
     const posterElement = await page.$('#poster-container');
     if (posterElement) {
@@ -129,6 +139,7 @@ async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
       });
     } else {
       // 降级：全页面截图
+      logger.warn('未找到海报容器，使用全页面截图');
       await page.screenshot({
         path: outputPath,
         type: 'png',
@@ -136,6 +147,7 @@ async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
       });
     }
     
+    logger.info('海报渲染成功', { posterVersion, filename, outputPath });
     return outputPath;
     
   } catch (error) {
@@ -145,23 +157,29 @@ async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
     
     // 如果已经是自定义错误，直接使用
     if (error instanceof RenderError) {
-      console.error('❌ 渲染失败 [用户提示]:', error.userMessage);
-      console.error('❌ 渲染失败 [技术详情]:', JSON.stringify(error.technicalDetails, null, 2));
+      logger.error('渲染失败', { 
+        userMessage: error.userMessage,
+        technicalDetails: error.technicalDetails,
+        posterVersion,
+        filename
+      });
       throw error;
     }
     
     // 否则对原始错误进行分类处理
     const { type, userMessage, technicalDetails } = classifyError(error);
     
-    console.error('❌ 渲染失败 [类型]:', type);
-    console.error('❌ 渲染失败 [用户提示]:', userMessage);
-    console.error('❌ 渲染失败 [技术详情]:', JSON.stringify({
-      ...technicalDetails,
-      stack: error.stack,
-      posterVersion,
-      filename,
-      variableKeys: Object.keys(variables)
-    }, null, 2));
+    logger.error('渲染失败', { 
+      type,
+      userMessage,
+      technicalDetails: {
+        ...technicalDetails,
+        stack: error.stack,
+        posterVersion,
+        filename,
+        variableKeys: Object.keys(variables)
+      }
+    });
     
     throw new RenderError(type, userMessage, technicalDetails);
     
@@ -171,8 +189,9 @@ async function renderPoster({ variables, posterVersion, filename, baseUrl }) {
       if (page) await page.close();
       if (context) await context.close();
       if (browser) await browser.close();
+      logger.debug('Playwright 资源已释放');
     } catch (e) {
-      console.warn('⚠️ 资源释放警告:', e.message);
+      logger.warn('资源释放警告', { error: e.message });
     }
   }
 }
